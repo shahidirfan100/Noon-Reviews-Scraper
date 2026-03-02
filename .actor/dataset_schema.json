@@ -1,0 +1,37 @@
+{
+  "actorSpecification": 1,
+  "fields": {
+    "productId": "Product ID",
+    "variantSku": "Variant SKU",
+    "title": "Title",
+    "author": "Author",
+    "rating": "Rating",
+    "date": "Date",
+    "createdAt": "Created At",
+    "verifiedPurchase": "Verified Purchase",
+    "reviewText": "Review Text",
+    "titleTranslation": "Title Translation",
+    "reviewTextTranslation": "Review Text Translation",
+    "helpfulCount": "Helpful Votes",
+    "imageUrls": "Review Images",
+    "variant": "Product Variant"
+  },
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "productId",
+          "variantSku",
+          "title",
+          "rating",
+          "author",
+          "date",
+          "verifiedPurchase",
+          "reviewText",
+          "helpfulCount"
+        ]
+      }
+    }
+  }
+}

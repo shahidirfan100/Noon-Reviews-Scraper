@@ -1,0 +1,11 @@
+{
+  "productId": "N70105592V",
+  "results_wanted": 20,
+  "sortFilter": "helpful",
+  "locale": "en-ae",
+  "proxyConfiguration": {
+    "useApifyProxy": true,
+    "apifyProxyGroups": ["RESIDENTIAL"]
+  }
+}
+

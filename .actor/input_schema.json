@@ -1,0 +1,73 @@
+{
+  "title": "Noon Reviews Scraper",
+  "description": "Scrape reviews from Noon.com using a product ID or URL.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "productId": {
+      "title": "Product ID",
+      "type": "string",
+      "description": "The specific Noon product ID (e.g., N70105592V). Either this or startUrl must be provided.",
+      "editor": "textfield",
+      "default": "N70105592V",
+      "prefill": "N70105592V"
+    },
+    "startUrl": {
+      "title": "Start URL",
+      "type": "string",
+      "description": "Start scraping from a specific Noon product or review URL. Example: https://www.noon.com/uae-en/reviews/N70105592V/",
+      "editor": "textfield"
+    },
+    "results_wanted": {
+      "title": "Maximum number of reviews",
+      "type": "integer",
+      "description": "The maximum number of reviews to collect.",
+      "minimum": 1,
+      "default": 20,
+      "prefill": 20,
+      "editor": "number"
+    },
+    "sortFilter": {
+      "title": "Sort Reviews By",
+      "type": "string",
+      "description": "How to sort the reviews. Options: helpful, newest, highest_rating, lowest_rating.",
+      "editor": "select",
+      "enum": [
+        "helpful",
+        "newest",
+        "highest_rating",
+        "lowest_rating"
+      ],
+      "default": "helpful",
+      "prefill": "helpful"
+    },
+    "locale": {
+      "title": "Region & Language",
+      "type": "string",
+      "description": "The Noon regional locale to use. Format: language-country (e.g., en-ae for UAE English, ar-ae for UAE Arabic, en-sa for Saudi Arabia).",
+      "editor": "textfield",
+      "default": "en-ae",
+      "prefill": "en-ae"
+    },
+    "proxyConfiguration": {
+      "title": "Proxy configuration",
+      "type": "object",
+      "description": "Use Apify Proxy for reliable scraping. Residential proxies are recommended for Noon.",
+      "editor": "proxy",
+      "default": {
+        "useApifyProxy": true,
+        "apifyProxyGroups": [
+          "RESIDENTIAL"
+        ]
+      },
+      "prefill": {
+        "useApifyProxy": true,
+        "apifyProxyGroups": [
+          "RESIDENTIAL"
+        ]
+      }
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

@@ -1,0 +1,26 @@
+{
+  "name": "noon-reviews-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Scrape reviews from Noon.com using Playwright Firefox",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node check-playwright-version.mjs && node --check src/main.js",
+    "postinstall": "npx playwright install firefox"
+  },
+  "keywords": [
+    "apify",
+    "scraper",
+    "noon"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "apify": "^3.5.2",
+    "cheerio": "^1.2.0",
+    "crawlee": "^3.15.3",
+    "got-scraping": "^4.2.1",
+    "playwright": "1.58.2"
+  }
+}
