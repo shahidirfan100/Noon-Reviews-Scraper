@@ -105,7 +105,9 @@ const sanitizeBrowserFetchHeaders = (headers) => {
     return clean;
 };
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => {
+    setTimeout(resolve, ms);
+});
 
 const hasAccessDeniedMarker = (text) => /access denied/i.test(String(text || ''));
 
@@ -428,9 +430,9 @@ try {
     const fetchPageInBrowser = async ({ apiUrl, payload, baseHeaders }) => {
         const browserHeaders = sanitizeBrowserFetchHeaders(baseHeaders);
         const response = await page.evaluate(
-            async ({ apiUrl, headers, requestBody }) => {
+            async ({ requestUrl, headers, requestBody }) => {
                 try {
-                    const result = await fetch(apiUrl, {
+                    const result = await fetch(requestUrl, {
                         method: 'POST',
                         credentials: 'include',
                         headers,
@@ -447,7 +449,7 @@ try {
                     };
                 }
             },
-            { apiUrl, headers: browserHeaders, requestBody: payload },
+            { requestUrl: apiUrl, headers: browserHeaders, requestBody: payload },
         );
         return response;
     };
@@ -515,7 +517,9 @@ try {
                 if (parsed) roots.push({ source: 'json-ld', value: parsed });
             }
 
+            // eslint-disable-next-line no-underscore-dangle
             if (window.__INITIAL_STATE__) roots.push({ source: '__INITIAL_STATE__', value: window.__INITIAL_STATE__ });
+            // eslint-disable-next-line no-underscore-dangle
             if (window.__PRELOADED_STATE__) roots.push({ source: '__PRELOADED_STATE__', value: window.__PRELOADED_STATE__ });
 
             const queue = [...roots];

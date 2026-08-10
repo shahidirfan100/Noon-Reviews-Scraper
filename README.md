@@ -31,8 +31,12 @@ Each dataset item represents one customer review. Fields that are not published 
 | `createdAt` | String | Review creation timestamp. |
 | `helpfulCount` | Number | Number of helpful votes recorded for the review. |
 | `verifiedPurchase` | Boolean | Whether Noon marks the review as a verified purchase. |
-| `imageUrls` | Array | URLs of images uploaded with the review. |
+| `imageUrls` | Array | Image identifiers supplied with the review. |
+| `imageUrlsV2` | Array | Full URLs for images uploaded with the review, when available. |
 | `variant` | Array | Purchased variant attributes, such as color, storage, or memory. |
+| `showTranslateBtn` | Boolean | Whether Noon shows a translation option for the review. |
+| `language` | String | Language of the published review. |
+| `uid` | String | Source identifier for the review. |
 
 ## How to use Noon Reviews Scraper
 
@@ -85,8 +89,12 @@ The Actor writes review records to the default Apify dataset. The primary output
 | `createdAt` | String | Review creation timestamp. |
 | `helpfulCount` | Number | Helpful-vote total. |
 | `verifiedPurchase` | Boolean | Verified-purchase indicator. |
-| `imageUrls` | Array | Review image URLs. |
+| `imageUrls` | Array | Review image identifiers. |
+| `imageUrlsV2` | Array | Full review image URLs, when supplied. |
 | `variant` | Array | Variant name and value pairs, when published. |
+| `showTranslateBtn` | Boolean | Translation-option indicator. |
+| `language` | String | Published review language. |
+| `uid` | String | Source review identifier. |
 
 ## Usage Examples
 
@@ -152,12 +160,18 @@ Each saved item represents one Noon customer review. The following example shows
   "helpfulCount": 12,
   "verifiedPurchase": true,
   "imageUrls": [
-    "https://f.nooncdn.com/reviews/image1.jpg"
+    "a151a806-2475-41de-912d-a8ef53a58a63-1749016299-1.png"
+  ],
+  "imageUrlsV2": [
+    "https://f.nooncdn.com/review/a151a806-2475-41de-912d-a8ef53a58a63-1749016299-1.png"
   ],
   "variant": [
     { "name": "Color", "value": "Titanium Black" },
     { "name": "Memory", "value": "256GB" }
-  ]
+  ],
+  "showTranslateBtn": false,
+  "language": "en",
+  "uid": "008ead34-9a94-450e-a659-6b7e22db3fdd"
 }
 ```
 
