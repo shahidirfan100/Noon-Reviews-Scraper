@@ -1,70 +1,131 @@
-# Noon Reviews Scraper
+## What does Noon Reviews Scraper do?
 
-Scrape comprehensive customer reviews and ratings from Noon.com products. Perfect for market research, competitor analysis, and sentiment evaluation.
+Noon Reviews Scraper collects public customer reviews from Noon.com product pages and saves each review as a structured dataset item. Provide a Noon product ID such as `N70105592V` or a complete product/reviews URL, then choose the number of reviews, review order, and regional locale.
 
-## Features
+The Noon reviews data includes ratings, review titles, written feedback, reviewer names, verified-purchase status, helpful votes, review images, translations, timestamps, and purchased product variants. Use the results for product research, competitor monitoring, customer feedback analysis, sentiment workflows, catalog enrichment, or AI and reporting pipelines.
 
-- **Extract Comprehensive Details:** Gathers reviewer name, exact star rating, absolute date, review text, and verifying purchase status.
-- **Richer Metadata:** Automatically extracts helpful vote counts, multi-language translated reviews, user-uploaded review images, and the exact product variant (Color, Storage, etc.) the customer purchased.
-- **Handling Anti-Bot Measures:** Bypasses basic bot protections automatically, ensuring reliable data extraction.
-- **Versatile Input:** Accepts either a direct `productId` or a direct URL to the reviews page. Can also configure regional storefronts and sorting methods.
-- **Limit Controls:** Configure the exact maximum number of reviews (`results_wanted`) you wish to extract.
+## Why use Noon Reviews Scraper?
 
-## Use Cases
+- **Collect customer feedback at scale** - Gather up to 1,000 reviews for a product in one run instead of copying reviews manually.
+- **Analyze product quality** - Compare star ratings, review text, verified purchases, helpful votes, and variant-level feedback.
+- **Support regional research** - Select a Noon storefront locale such as UAE English, UAE Arabic, or Saudi Arabia English.
+- **Prioritize useful reviews** - Sort results by helpfulness, newest reviews, highest ratings, or lowest ratings.
+- **Prepare data for analysis** - Download JSON, CSV, Excel, XML, and other Apify dataset formats after the run.
+- **Automate repeat collection** - Schedule runs, connect webhooks, or retrieve results through the Apify API for monitoring and downstream workflows.
 
-- **E-commerce Analytics:** Understand customer satisfaction and pain points for various products and exact variants.
-- **Competitor Analysis:** Scrape reviews of competing products to identify market advantages.
-- **Sentiment Analysis:** Feed extracted review text (or their English translations) into AI models to gauge overall customer feeling.
-- **Product Research:** Identify common defects or highly praised features for R&D purposes.
+## What data can you extract from Noon.com reviews?
 
----
+Each dataset item represents one customer review. Fields that are not published for a particular review may be omitted or empty.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `productId` | String | Noon product ID used for the run. |
+| `variantSku` | String | SKU of the product variant associated with the review. |
+| `title` | String | Review title or headline. |
+| `author` | String | Reviewer display name when available. |
+| `rating` | Number | Star rating, normally from 1 to 5. |
+| `reviewText` | String | Original written review text. |
+| `titleTranslation` | String | English translation of the review title when supplied by Noon. |
+| `reviewTextTranslation` | String | English translation of the review text when supplied by Noon. |
+| `date` | String | Last-updated date for the review. |
+| `createdAt` | String | Review creation timestamp. |
+| `helpfulCount` | Number | Number of helpful votes recorded for the review. |
+| `verifiedPurchase` | Boolean | Whether Noon marks the review as a verified purchase. |
+| `imageUrls` | Array | URLs of images uploaded with the review. |
+| `variant` | Array | Purchased variant attributes, such as color, storage, or memory. |
+
+## How to use Noon Reviews Scraper
+
+1. Open Noon Reviews Scraper in the Apify Console.
+2. Enter a Noon `productId` or a complete `startUrl`. At least one of these values is needed.
+3. Set `results_wanted` and choose the desired `sortFilter` and `locale`.
+4. Keep the default Apify residential proxy configuration for larger or recurring runs, or provide your own supported proxy settings.
+5. Start the run and inspect the dataset preview.
+6. Download the review data or connect the dataset to a spreadsheet, webhook, automation, or API workflow.
 
 ## Input Parameters
 
-The scraper accepts the following parameters via JSON:
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `productId` | String | No* | `N70105592V` | Noon product ID, for example `N70105592V`. |
+| `startUrl` | String | No* | - | Full Noon product or reviews URL containing the product ID. |
+| `results_wanted` | Integer | No | `20` | Maximum number of reviews to save, up to `1,000`. |
+| `sortFilter` | String | No | `helpful` | Review order: `helpful`, `newest`, `highest_rating`, or `lowest_rating`. |
+| `locale` | String | No | `en-ae` | Language and country code, such as `en-ae`, `ar-ae`, or `en-sa`. |
+| `proxyConfiguration` | Object | No | Apify residential proxy | Apify Proxy settings for reliable collection. |
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `productId` | `String` | The Noon product ID (e.g. `N70105592V`). |
-| `startUrl` | `String` | Alternative to `productId`. The full Noon product URL. |
-| `results_wanted` | `Integer` | The maximum number of reviews to extract (Default: 20). |
-| `sortFilter` | `String` | How to sort the reviews (helpful, newest, highest_rating, lowest_rating). |
-| `locale` | `String` | The regional storefront language code (e.g., en-ae, ar-sa). |
-| `proxyConfiguration` | `Object` | Apify proxy settings. Residential proxies are heavily recommended. |
+\* Provide either `productId` or `startUrl`. If both are provided, `productId` identifies the product to collect.
+
+### Locale examples
+
+The locale controls the Noon regional storefront and review language used for the run. Common values include:
+
+| Locale | Storefront use |
+|--------|----------------|
+| `en-ae` | UAE storefront in English |
+| `ar-ae` | UAE storefront in Arabic |
+| `en-sa` | Saudi Arabia storefront in English |
+| `ar-sa` | Saudi Arabia storefront in Arabic |
 
 ## Output Data
 
-Data is stored in the Apify dataset in JSON format containing the following fields:
+The Actor writes review records to the default Apify dataset. The primary output fields are:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `productId` | `String` | The overall ID of the targeted product. |
-| `variantSku` | `String` | The specific variant SKU that the user purchased and reviewed. |
-| `title` | `String` | The title or headline of the review. |
-| `author` | `String` | The display name of the reviewer. |
-| `rating` | `Number` | The star rating given out of 5. |
-| `reviewText` | `String` | The descriptive body of the review. |
-| `titleTranslation` | `String` | A machine English translation of the review title (if applicable). |
-| `reviewTextTranslation` | `String` | A machine English translation of the review body (if applicable). |
-| `date` | `String` | When the review was last updated. |
-| `createdAt` | `String` | The exact timestamp of when the review was created. |
-| `helpfulCount` | `Number` | The number of times this review was voted as helpful. |
-| `verifiedPurchase` | `Boolean` | True if the purchase was verified by Noon. |
-| `imageUrls` | `Array` | A list of URLs pointing to images uploaded by the reviewer. |
-| `variant` | `Array` | Characteristics of the purchased variant (e.g., Color, Memory). |
-
----
+| `productId` | String | Target product ID. |
+| `variantSku` | String | Reviewed product variant SKU. |
+| `title` | String | Customer review headline. |
+| `author` | String | Customer display name. |
+| `rating` | Number | Customer rating out of five. |
+| `reviewText` | String | Original customer feedback. |
+| `titleTranslation` | String | Translated review title, when available. |
+| `reviewTextTranslation` | String | Translated review body, when available. |
+| `date` | String | Review update date. |
+| `createdAt` | String | Review creation timestamp. |
+| `helpfulCount` | Number | Helpful-vote total. |
+| `verifiedPurchase` | Boolean | Verified-purchase indicator. |
+| `imageUrls` | Array | Review image URLs. |
+| `variant` | Array | Variant name and value pairs, when published. |
 
 ## Usage Examples
 
-Here is an example of the `INPUT.json` configuration:
+### Basic extraction by product ID
+
+Collect the 20 most helpful reviews for a known Noon product:
 
 ```json
 {
   "productId": "N70105592V",
   "results_wanted": 20,
   "sortFilter": "helpful",
-  "locale": "en-ae",
+  "locale": "en-ae"
+}
+```
+
+### Extraction from a reviews URL
+
+Use a complete Noon reviews URL when you already have a product page link:
+
+```json
+{
+  "startUrl": "https://www.noon.com/uae-en/reviews/N70105592V/",
+  "results_wanted": 50,
+  "sortFilter": "newest",
+  "locale": "en-ae"
+}
+```
+
+### Filtered regional review collection
+
+Collect a larger set of low-rated reviews from the Saudi Arabic storefront for quality and product-improvement analysis:
+
+```json
+{
+  "productId": "N70105592V",
+  "results_wanted": 200,
+  "sortFilter": "lowest_rating",
+  "locale": "ar-sa",
   "proxyConfiguration": {
     "useApifyProxy": true,
     "apifyProxyGroups": ["RESIDENTIAL"]
@@ -74,18 +135,20 @@ Here is an example of the `INPUT.json` configuration:
 
 ## Sample Output
 
+Each saved item represents one Noon customer review. The following example shows the main fields that may be returned:
+
 ```json
 {
   "productId": "N70105592V",
-  "variantSku": "N70105592V",
-  "author": "Ahmed K.",
+  "variantSku": "N70105592V-11",
   "title": "Excellent quality for the price",
+  "author": "Ahmed K.",
   "rating": 5,
   "reviewText": "I genuinely loved the design and the battery life is amazing.",
   "titleTranslation": "Excellent quality for the price",
   "reviewTextTranslation": "I genuinely loved the design and the battery life is amazing.",
-  "date": "2023-10-24T12:00:00.000Z",
-  "createdAt": "2023-10-23T10:00:00.000Z",
+  "date": "2026-07-24T12:00:00.000Z",
+  "createdAt": "2026-07-23T10:00:00.000Z",
   "helpfulCount": 12,
   "verifiedPurchase": true,
   "imageUrls": [
@@ -98,21 +161,71 @@ Here is an example of the `INPUT.json` configuration:
 }
 ```
 
----
+## Tips for Best Results
 
-## Tips
+- **Start with the product ID** - Use `productId` when you already know the Noon SKU. It is the simplest input and avoids errors from malformed URLs.
+- **Test with a small limit** - Begin with `results_wanted` set to `20` or `50`, confirm the product and fields, then increase the limit.
+- **Choose the right sort order** - Use `helpful` for representative feedback, `newest` for recent monitoring, and rating-specific options for quality analysis.
+- **Match the locale to the storefront** - Use the country and language that correspond to the Noon product page you want to analyze.
+- **Use residential proxies for larger runs** - Residential Apify Proxy is recommended for high-volume, scheduled, or repeated collection.
+- **Expect source-dependent fields** - Not every review includes a title, translation, image, variant, helpful count, or verified-purchase flag. Missing values generally reflect what Noon publishes.
+- **Check the dataset preview** - Review several records before scheduling a large run or sending the data to a sentiment-analysis workflow.
 
-- **Proxies:** Noon.com actively blocks datacenter IP addresses. Please ensure you are utilizing Residential Proxies within your `proxyConfiguration`.
-- **Targeting:** Provide only the `productId` if you want a reliable fallback.
+## Integrations and Export Formats
 
-## FAQ
+| Integration or format | Use |
+|------------------------|-----|
+| JSON | Feed review records into applications, AI workflows, and custom analysis. |
+| CSV or Excel | Share feedback with product, research, and customer-support teams. |
+| Google Sheets or Airtable | Filter, annotate, and compare review datasets. |
+| Webhooks | Notify another service when a run finishes. |
+| Make or Zapier | Send review records into alerts, dashboards, and business workflows. |
+| Apify API | Start runs and retrieve dataset items programmatically. |
 
-**Does this scraper run in the background?**
-Yes, it operates fully in the background automatically paginating through the review sections.
+## Frequently Asked Questions
 
-**Can I scrape thousands of reviews at once?**
-Yes, but you will be reliant on your proxy connection remaining intact. Setting a generous timeout and maximum retry limit might be beneficial.
+### Can I collect reviews from a Noon product URL?
+
+Yes. Put a complete product or reviews URL in `startUrl`. The URL should contain the Noon product ID.
+
+### Can I collect thousands of Noon reviews?
+
+The Actor saves up to `1,000` reviews per run. Start with a smaller limit to validate the product and locale before running a larger collection.
+
+### Can I sort Noon reviews by rating or date?
+
+Yes. Use `helpful`, `newest`, `highest_rating`, or `lowest_rating` in `sortFilter`.
+
+### Does the Actor support multiple Noon countries and languages?
+
+Yes. Set `locale` to a supported language-country value such as `en-ae`, `ar-ae`, `en-sa`, or `ar-sa` to target the corresponding Noon storefront.
+
+### Why are some review fields missing?
+
+Fields may be missing because Noon does not publish every value for every review. Check several records before treating an absent title, image, translation, variant, or vote count as an extraction problem.
+
+### Can I export Noon reviews to CSV or Excel?
+
+Yes. Apify dataset results can be downloaded as CSV, Excel, JSON, XML, and other supported formats.
+
+### Can I schedule recurring review collection?
+
+Yes. Create an Apify schedule to run the Actor hourly, daily, weekly, or at another interval, then compare datasets over time.
+
+### Is collecting Noon reviews legal?
+
+You are responsible for using the Actor lawfully. Review Noon’s terms, applicable privacy and data-protection requirements, and any restrictions that apply to your use case. Collect only the public data you need and use it responsibly.
+
+## Related Actors
+
+- [Noon.com Product Scraper](https://apify.com/shahidirfan/noon-com-scraper) - Collect Noon product listings, prices, ratings, seller details, discounts, and product links.
+- [Trendyol Reviews Scraper ⭐](https://apify.com/shahidirfan/trendyol-reviews-scraper) - Collect product reviews, ratings, review text, helpful votes, and variant details from Trendyol.
+- [Sephora Scraper](https://apify.com/shahidirfan/sephora-scraper) - Collect ecommerce product details, prices, ratings, review counts, availability, and product links from Sephora.
+
+## Support
+
+For bugs, feature requests, or questions about a run, use the Issues tab on the Actor page. Include the input configuration and run details when reporting a reproducible problem.
 
 ## Legal Notice
 
-Data collected by this Scraper is publicly accessible. You are responsible for ensuring that your use of the Scraped Data complies with all applicable local and international laws, including data privacy requirements.
+This Actor is intended for legitimate collection of publicly available Noon review data. Users are responsible for complying with Noon’s terms of service, applicable laws, privacy obligations, and restrictions connected with the data they collect. Do not use the output for unlawful discrimination, harassment, spam, or other harmful activity.
