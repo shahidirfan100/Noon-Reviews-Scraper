@@ -7,7 +7,7 @@ const API_URL = 'https://www.noon.com/_vs/mp/mp-trust-api/product-reviews/sku/li
 const PER_PAGE = 15;
 const MAX_RESULTS_WANTED = 1000;
 const MAX_HTTP_ATTEMPTS = 3;
-const MAX_BROWSER_ATTEMPTS = 4;
+const MAX_BROWSER_ATTEMPTS = 3;
 const RETRYABLE_STATUS_CODES = new Set([403, 408, 425, 429, 500, 502, 503, 504]);
 const ALLOWED_SORT_FILTERS = new Set(['helpful', 'newest', 'highest_rating', 'lowest_rating']);
 const REVIEW_API_PATTERNS = [
@@ -15,6 +15,7 @@ const REVIEW_API_PATTERNS = [
     /mp-trust-api.*review/i,
     /\/reviews\/sku\//i,
 ];
+const RATING_SUMMARY_API_PATTERN = /\/product-ratings\/sku\//i;
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 15.7; rv:147.0) Gecko/20100101 Firefox/147.0',
@@ -22,6 +23,13 @@ const USER_AGENTS = [
 ];
 
 const pickUserAgent = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+
+const describeError = (error) => {
+    const message = String(error?.message || error || 'Unknown error')
+        .replace(/https?:\/\/[^\s]+/gi, '[URL]')
+        .replace(/(cookie|token|authorization)\s*[:=]\s*[^,\s]+/gi, '$1=[redacted]');
+    return message.slice(0, 250);
+};
 
 const parseLocale = (localeValue) => {
     const raw = String(localeValue || '').toLowerCase().trim();
@@ -70,6 +78,29 @@ const parseLocale = (localeValue) => {
         };
     }
     return { lang: 'en', country: 'ae', normalizedLocale: 'en-ae', siteLocale: 'uae-en' };
+};
+
+const normalizeNoonUrl = (value) => {
+    let parsed;
+    try {
+        parsed = new URL(value);
+    } catch {
+        throw new Error('startUrl must be a valid Noon product or reviews URL.');
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol) || !/(^|\.)noon\.com$/i.test(parsed.hostname)) {
+        throw new Error('startUrl must use a Noon.com domain.');
+    }
+
+    return parsed.toString();
+};
+
+const getLocaleFromNoonUrl = (value) => {
+    const firstPathSegment = new URL(value).pathname.split('/').filter(Boolean)[0] || '';
+    if (!/^(?:uae|saudi|egypt|kuwait|bahrain|oman|qatar)-(?:en|ar)$/i.test(firstPathSegment)) {
+        return null;
+    }
+    return parseLocale(firstPathSegment);
 };
 
 const sanitizeRequestHeaders = (headers) => {
@@ -210,6 +241,7 @@ const safeJsonParse = (value) => {
 
 const isReviewApiUrl = (url) => REVIEW_API_PATTERNS.some((pattern) => pattern.test(String(url || '')));
 const isInternalNoonApiUrl = (url) => String(url || '').includes('www.noon.com/_vs/');
+const isRatingSummaryApiUrl = (url) => RATING_SUMMARY_API_PATTERN.test(String(url || ''));
 
 const extractItemsFromApiData = (data) => {
     if (!data) return [];
@@ -224,6 +256,7 @@ const extractItemsFromApiData = (data) => {
 };
 
 const buildReviewSignature = (record) => JSON.stringify([
+    record.uid ?? '',
     record.variantSku ?? '',
     record.author ?? '',
     record.title ?? '',
@@ -231,11 +264,55 @@ const buildReviewSignature = (record) => JSON.stringify([
     record.createdAt ?? record.date ?? '',
 ]);
 
+const getApiReportedTotal = (data) => {
+    const candidates = [
+        data?.total,
+        data?.totalCount,
+        data?.reviewCount,
+        data?.meta?.total,
+        data?.meta?.totalCount,
+        data?.pagination?.total,
+        data?.pagination?.totalCount,
+        data?.pageInfo?.total,
+        data?.summary?.total,
+        data?.summary?.totalReviews,
+    ];
+    return candidates.find((value) => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0);
+};
+
+const getRatingSummaryFromApiData = (data) => {
+    const candidates = [
+        data?.ratingSummary,
+        data?.ratingsSummary,
+        data?.ratingBreakdown,
+        data?.ratingsBreakdown,
+        data?.breakdown,
+        data?.summary?.ratingSummary,
+        data?.summary?.ratingsBreakdown,
+        data?.payload?.ratingSummary,
+        data?.payload?.ratingsBreakdown,
+    ];
+    return candidates.find((candidate) => candidate && typeof candidate === 'object') || null;
+};
+
+const getRatingSummaryFromPageState = async (page) => page.evaluate(() => {
+    const text = document.body?.innerText || '';
+    const match = text.match(/(\d(?:[.,]\d)?)\s+(\d[\d,]*)\s+Ratings\b/i)
+        || text.match(/(\d(?:[.,]\d)?)\s+(\d[\d,]*)\s+تقييم(?:ات)?\b/i);
+    if (!match) return null;
+
+    const averageRating = Number(match[1].replace(',', '.'));
+    const ratingCount = Number(match[2].replace(/,/g, ''));
+    if (!Number.isFinite(averageRating) || !Number.isFinite(ratingCount)) return null;
+    return { averageRating, ratingCount };
+});
+
 await Actor.init();
 
 let browser;
 let context;
 let page;
+let fatalError;
 
 try {
     const input = (await Actor.getInput()) || {};
@@ -245,32 +322,41 @@ try {
         results_wanted = 20,
         sortFilter = 'helpful',
         locale = 'en-ae',
+        includeRatingSummary = false,
         proxyConfiguration: proxyConfig,
     } = input;
 
-    if (!productId && !startUrl) {
-        throw new Error('You must provide either a productId or a startUrl.');
-    }
+    const productIdValue = typeof productId === 'string' ? productId.trim() : String(productId || '').trim();
+    const startUrlValue = typeof startUrl === 'string' ? startUrl.trim() : '';
+    let sku = productIdValue || undefined;
+    let inputSource;
+    let targetUrl;
+    let directUrlLocale;
 
-    let sku = productId;
-    if (!sku && startUrl) {
-        const match = startUrl.match(/\/(N[A-Za-z0-9-]+)\/?/);
-        if (!match) throw new Error(`Could not extract product ID from URL: ${startUrl}`);
-        sku = match[1];
-        log.info(`Extracted Product ID ${sku} from URL.`);
+    if (startUrlValue) {
+        targetUrl = normalizeNoonUrl(startUrlValue);
+        directUrlLocale = getLocaleFromNoonUrl(targetUrl);
+        sku = undefined;
+        inputSource = 'startUrl';
+    } else if (productIdValue) {
+        inputSource = 'productId';
+    } else {
+        throw new Error('Provide either a Noon product/reviews URL or a Noon product ID.');
     }
 
     const requestedTotalRaw = Number(results_wanted);
     const requestedTotal = Number.isFinite(requestedTotalRaw) && requestedTotalRaw > 0
         ? Math.min(Math.floor(requestedTotalRaw), MAX_RESULTS_WANTED)
         : 20;
+    const shouldIncludeRatingSummary = includeRatingSummary === true;
     const normalizedSortFilter = ALLOWED_SORT_FILTERS.has(sortFilter) ? sortFilter : 'helpful';
     if (normalizedSortFilter !== sortFilter) {
         log.warning(`Invalid sortFilter "${sortFilter}" provided. Falling back to "helpful".`);
     }
     const normalizedInputLocale = String(locale || 'en-ae').toLowerCase();
-    const { lang, country, normalizedLocale, siteLocale } = parseLocale(normalizedInputLocale);
-    const targetUrl = `https://www.noon.com/${siteLocale}/reviews/${sku}/`;
+    const inputLocale = parseLocale(normalizedInputLocale);
+    const { lang, country, normalizedLocale, siteLocale } = directUrlLocale || inputLocale;
+    if (!targetUrl) targetUrl = `https://www.noon.com/${siteLocale}/reviews/${sku}/`;
 
     const desiredCountryCode = country.toUpperCase();
     const proxyConfigurationInput = proxyConfig
@@ -296,8 +382,9 @@ try {
     let interceptedPayloadTemplate;
     let interceptedApiUrl;
     let interceptedResponseData;
+    let interceptedRatingSummaryData;
 
-    log.info(`Starting Noon Reviews Fetcher for SKU: ${sku}`);
+    log.info(`Starting Noon Reviews Fetcher | source=${inputSource} | target=${requestedTotal}`);
     log.info('Launching Firefox to obtain session and intercept network calls...');
 
     const launchBrowserAttempt = async (attempt) => {
@@ -324,7 +411,6 @@ try {
         page.on('request', (request) => {
             if (!interceptedInternalHeaders && isInternalNoonApiUrl(request.url()) && request.method() === 'GET') {
                 interceptedInternalHeaders = sanitizeRequestHeaders(request.headers());
-                log.info(`Captured internal API headers from: ${request.url()}`);
             }
             if (request.method() === 'POST' && isReviewApiUrl(request.url())) {
                 interceptedApiUrl = request.url();
@@ -333,11 +419,20 @@ try {
                 const parsedTemplate = typeof postData === 'string' ? safeJsonParse(postData) : null;
                 if (parsedTemplate && typeof parsedTemplate === 'object') {
                     interceptedPayloadTemplate = parsedTemplate;
+                    if (typeof parsedTemplate.sku === 'string' && parsedTemplate.sku.trim()) {
+                        sku = parsedTemplate.sku.trim();
+                    }
                 }
             }
         });
         page.on('response', async (response) => {
             try {
+                if (isRatingSummaryApiUrl(response.url()) && response.status() === 200 && !interceptedRatingSummaryData) {
+                    const ratingBody = await response.text();
+                    const ratingData = safeJsonParse(ratingBody);
+                    if (ratingData) interceptedRatingSummaryData = ratingData;
+                    return;
+                }
                 if (interceptedResponseData) return;
                 if (!isReviewApiUrl(response.url())) return;
                 if (response.status() !== 200) return;
@@ -358,7 +453,7 @@ try {
     for (let attempt = 1; attempt <= MAX_BROWSER_ATTEMPTS; attempt += 1) {
         try {
             await launchBrowserAttempt(attempt);
-            const pageResponse = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            const pageResponse = await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
             const status = pageResponse?.status() ?? 0;
             log.info(`Loaded page with status: ${status} (attempt ${attempt}/${MAX_BROWSER_ATTEMPTS})`);
 
@@ -374,12 +469,12 @@ try {
                 continue;
             }
 
-            await page.waitForTimeout(9000);
+            await page.waitForTimeout(250);
             pageUrl = page.url() || targetUrl;
             pageLoaded = true;
             break;
-        } catch (err) {
-            log.warning(`Browser attempt ${attempt} failed: ${err.message}`);
+        } catch (error) {
+            log.warning(`Browser attempt ${attempt}/${MAX_BROWSER_ATTEMPTS} failed: ${describeError(error)}`);
             await context?.close().catch(() => undefined);
             await browser?.close().catch(() => undefined);
             context = undefined;
@@ -391,8 +486,37 @@ try {
         throw new Error('Failed to load Noon page without Access Denied after multiple proxy session attempts. Try Apify residential proxy in the target country.');
     }
 
-    const triggerReviewTraffic = async () => {
-        const clickSelectors = [
+    const resolveSkuFromLoadedPage = async () => page.evaluate(() => {
+        const candidates = [
+            window.location.href,
+            document.querySelector('link[rel="canonical"]')?.href,
+            document.querySelector('meta[property="og:url"]')?.content,
+        ].filter(Boolean);
+
+        for (const candidate of candidates) {
+            // Noon product identifiers use more than one prefix, including N and Z.
+            // Resolve only from the page that was already opened, never from raw input.
+            const match = String(candidate).match(/\/([A-Z][A-Z0-9-]{5,})(?:\/|$|\?)/);
+            if (match) return match[1];
+        }
+        return null;
+    });
+
+    if (!sku) {
+        sku = await resolveSkuFromLoadedPage();
+        if (sku) log.info('Resolved the review target from the loaded Noon page.');
+    }
+
+    const warmUpReviewSession = async ({ retry = false } = {}) => {
+        log.info(retry
+            ? 'Refreshing Noon review session after a protected API response.'
+            : 'Preparing Noon review session before the first review request.');
+
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await page.waitForTimeout(750);
+        await page.evaluate(() => window.scrollTo(0, 0));
+
+        const reviewSelectors = [
             'a[href*="/reviews/"]',
             '[data-qa*="review"]',
             '[data-testid*="review"]',
@@ -400,27 +524,31 @@ try {
             'button:has-text("reviews")',
         ];
 
-        for (let i = 0; i < 3; i += 1) {
-            await page.evaluate(() => window.scrollBy(0, window.innerHeight));
-            await page.waitForTimeout(1200);
-        }
-        await page.evaluate(() => window.scrollTo(0, 0));
-        await page.waitForTimeout(1000);
-
-        for (const selector of clickSelectors) {
+        for (const selector of reviewSelectors) {
+            const locator = page.locator(selector).first();
             try {
-                const locator = page.locator(selector).first();
                 if (await locator.count()) {
                     await locator.click({ timeout: 2000 });
-                    await page.waitForTimeout(1800);
+                    await page.waitForTimeout(1200);
+                    break;
                 }
             } catch {
-                // Keep trying other selectors.
+                // Continue with the current session if a visual control is unavailable.
             }
         }
+
+        await page.waitForTimeout(1800);
+        pageUrl = page.url() || pageUrl;
     };
 
-    await triggerReviewTraffic();
+    // Noon often rejects a brand-new session's first replayed request. Warm the live page first so
+    // successful runs do not begin with a recoverable 403 in the log.
+    let sessionWarmUpUsed = false;
+    let sessionRefreshRetried = false;
+    if (sku && !interceptedResponseData) {
+        sessionWarmUpUsed = true;
+        await warmUpReviewSession();
+    }
 
     const getCookieHeader = async () => {
         const cookies = await context.cookies();
@@ -457,9 +585,11 @@ try {
     const fetchPageWithHttp = async ({ apiUrl, payload, headers }) => {
         for (let attempt = 1; attempt <= MAX_HTTP_ATTEMPTS; attempt += 1) {
             try {
-                const response = await gotScraping.post(apiUrl, {
-                    proxyUrl: sessionProxyUrl,
-                    headers,
+            const response = await gotScraping.post(apiUrl, {
+                proxyUrl: sessionProxyUrl,
+                http2: false,
+                useHeaderGenerator: false,
+                headers,
                     json: payload,
                     timeout: { request: 30000 },
                 });
@@ -467,14 +597,14 @@ try {
             } catch (error) {
                 const statusCode = error.response?.statusCode || 0;
                 const body = error.response?.body || error.message;
-                const shouldRetry = RETRYABLE_STATUS_CODES.has(statusCode) || statusCode === 0;
+                const shouldRetry = (RETRYABLE_STATUS_CODES.has(statusCode) && statusCode !== 403) || statusCode === 0;
 
                 if (!shouldRetry || attempt === MAX_HTTP_ATTEMPTS) {
                     return { statusCode, body };
                 }
 
                 const waitMs = attempt * 1500;
-                log.warning(`HTTP request failed with ${statusCode} on attempt ${attempt}. Retrying in ${waitMs}ms.`);
+                log.warning(`HTTP request ${attempt}/${MAX_HTTP_ATTEMPTS} failed with ${statusCode}: ${describeError(error)}. Retrying in ${waitMs}ms.`);
                 await sleep(waitMs);
             }
         }
@@ -584,7 +714,58 @@ try {
     let useBrowserFallback = false;
     let apiUrl = interceptedApiUrl || API_URL;
     let duplicatePageStreak = 0;
+    let apiReportedTotal;
+    let stopReason = 'requested limit reached';
+    let ratingSummarySaved = false;
     const savedReviewSignatures = new Set();
+
+    const pushRatingSummary = async (apiData) => {
+        if (!shouldIncludeRatingSummary || ratingSummarySaved) return false;
+
+        const ratingSummary = getRatingSummaryFromApiData(apiData)
+            || getRatingSummaryFromApiData(interceptedRatingSummaryData);
+        if (!ratingSummary) return false;
+
+        await Dataset.pushData({
+            recordType: 'rating_summary',
+            productId: sku,
+            ratingSummary,
+        });
+        ratingSummarySaved = true;
+        log.info('Saved Noon rating summary.');
+        return true;
+    };
+
+    const requestReviewPage = async ({ requestApiUrl, payload }) => {
+        const cookieHeader = await getCookieHeader();
+        const baseHeaders = {
+            accept: 'application/json, text/plain, */*',
+            'accept-language': `${lang}-${country},${lang};q=0.9,en;q=0.8`,
+            'content-type': 'application/json',
+            origin: 'https://www.noon.com',
+            referer: pageUrl,
+            'user-agent': userAgent,
+            'x-platform': 'web',
+            'x-locale': normalizedLocale,
+            'x-mp-country': country,
+            'x-content': 'desktop',
+            'x-cms': 'v2',
+            ...(interceptedInternalHeaders || {}),
+            ...(interceptedHeaders || {}),
+            cookie: cookieHeader,
+        };
+
+        let response = useBrowserFallback
+            ? await fetchPageInBrowser({ apiUrl: requestApiUrl, payload, baseHeaders })
+            : await fetchPageWithHttp({ apiUrl: requestApiUrl, payload, headers: baseHeaders });
+
+        if (!useBrowserFallback && response.statusCode !== 200) {
+            log.warning(`HTTP request blocked with ${response.statusCode}. Switching to browser-context fetch.`);
+            useBrowserFallback = true;
+            response = await fetchPageInBrowser({ apiUrl: requestApiUrl, payload, baseHeaders });
+        }
+        return response;
+    };
 
     const pushUniqueReviews = async (items, sourceLabel) => {
         const remaining = requestedTotal - totalSaved;
@@ -609,13 +790,18 @@ try {
 
     if (interceptedResponseData) {
         const interceptedItems = extractItemsFromApiData(interceptedResponseData);
+        await pushRatingSummary(interceptedResponseData);
         if (interceptedItems.length > 0) {
             await pushUniqueReviews(interceptedItems, 'intercepted browser response');
             pageNumber = 2;
         }
     }
 
-    while (totalSaved < requestedTotal) {
+    if (!sku) {
+        log.warning('The supplied URL did not trigger a usable Noon reviews request. Skipping API pagination and checking page state.');
+    }
+
+    while (sku && totalSaved < requestedTotal) {
         if (interceptedApiUrl) apiUrl = interceptedApiUrl;
         const requestedPerPage = PER_PAGE;
         const payload = buildPayload({
@@ -627,38 +813,23 @@ try {
             payloadTemplate: interceptedPayloadTemplate,
         });
 
-        const cookieHeader = await getCookieHeader();
-        const baseHeaders = {
-            accept: 'application/json, text/plain, */*',
-            'accept-language': `${lang}-${country},${lang};q=0.9,en;q=0.8`,
-            'content-type': 'application/json',
-            origin: 'https://www.noon.com',
-            referer: pageUrl,
-            'user-agent': userAgent,
-            'x-platform': 'web',
-            'x-locale': normalizedLocale,
-            'x-mp-country': country,
-            'x-content': 'desktop',
-            'x-cms': 'v2',
-            ...(interceptedInternalHeaders || {}),
-            ...(interceptedHeaders || {}),
-            cookie: cookieHeader,
-        };
+        log.info(`API request | page=${pageNumber} | batch=${requestedPerPage} | remaining=${requestedTotal - totalSaved}`);
 
-        log.info(`API request for page ${pageNumber} (fetching ${requestedPerPage}, remaining ${requestedTotal - totalSaved}) using ${apiUrl}...`);
-
-        let response = useBrowserFallback
-            ? await fetchPageInBrowser({ apiUrl, payload, baseHeaders })
-            : await fetchPageWithHttp({ apiUrl, payload, headers: baseHeaders });
-
-        if (!useBrowserFallback && response.statusCode !== 200) {
-            log.warning(`HTTP request blocked with ${response.statusCode}. Switching to browser-context fetch.`);
-            useBrowserFallback = true;
-            response = await fetchPageInBrowser({ apiUrl, payload, baseHeaders });
+        let response = await requestReviewPage({ requestApiUrl: apiUrl, payload });
+        if (response.statusCode === 403 && !sessionRefreshRetried) {
+            sessionWarmUpUsed = true;
+            sessionRefreshRetried = true;
+            await warmUpReviewSession({ retry: true });
+            useBrowserFallback = false;
+            log.info('Review session refreshed. Retrying the protected API request.');
+            response = await requestReviewPage({ requestApiUrl: apiUrl, payload });
         }
 
         if (response.statusCode !== 200) {
-            log.error(`API returned status ${response.statusCode}. Body: ${normalizeResponseBody(response.body).slice(0, 300)}`);
+            if (useBrowserFallback && response.statusCode === 0) {
+                log.warning(`Browser-context request failed: ${describeError(response.body)}`);
+            }
+            log.error(`API request returned status ${response.statusCode}.`);
             break;
         }
 
@@ -667,13 +838,20 @@ try {
             const rawBody = normalizeResponseBody(response.body);
             data = JSON.parse(rawBody);
         } catch {
-            log.error(`Invalid JSON on page ${pageNumber}. Body: ${normalizeResponseBody(response.body).slice(0, 300)}`);
+            log.error(`Invalid JSON response on page ${pageNumber}.`);
             break;
         }
 
         const items = extractItemsFromApiData(data);
+        await pushRatingSummary(data);
+        const currentApiTotal = getApiReportedTotal(data);
+        if (currentApiTotal !== undefined) apiReportedTotal = Number(currentApiTotal);
         if (!Array.isArray(items) || items.length === 0) {
+            if (apiReportedTotal !== undefined && totalSaved < apiReportedTotal) {
+                log.warning(`Noon returned no more review records after ${totalSaved}, although its response reported ${apiReportedTotal}.`);
+            }
             log.info('No more reviews returned. Stopping pagination.');
+            stopReason = 'No more reviews returned by Noon';
             break;
         }
 
@@ -682,6 +860,7 @@ try {
             duplicatePageStreak += 1;
             if (duplicatePageStreak >= 2) {
                 log.info('Received duplicate-only pages twice in a row. Stopping pagination.');
+                stopReason = 'Two duplicate-only pages returned by Noon';
                 break;
             }
             log.info('Received duplicate-only page. Continuing to next page.');
@@ -690,14 +869,14 @@ try {
         }
         duplicatePageStreak = 0;
 
-        if (items.length < requestedPerPage) {
-            log.info('Last page reached (returned less than requested perPage).');
+        if (apiReportedTotal !== undefined && totalSaved >= apiReportedTotal) {
+            log.info(`All ${apiReportedTotal} reviews reported by Noon were fetched.`);
+            stopReason = 'Reached Noon-reported review total';
             break;
         }
-        const apiTotal = data?.total ?? data?.meta?.total ?? data?.pagination?.total;
-        if (apiTotal != null && totalSaved >= apiTotal) {
-            log.info(`All ${apiTotal} available reviews fetched.`);
-            break;
+
+        if (items.length < requestedPerPage) {
+            log.info(`Short batch (${items.length}/${requestedPerPage}). Checking the next page before stopping.`);
         }
 
         pageNumber += 1;
@@ -713,21 +892,59 @@ try {
         }
     }
 
-    log.info(`Extraction complete. Total saved: ${totalSaved}`);
-    await Actor.setValue('SUMMARY', {
+    if (shouldIncludeRatingSummary && !ratingSummarySaved) {
+        const pageRatingSummary = await getRatingSummaryFromPageState(page);
+        if (pageRatingSummary) {
+            await Dataset.pushData({
+                recordType: 'rating_summary',
+                productId: sku,
+                ratingSummary: pageRatingSummary,
+            });
+            ratingSummarySaved = true;
+            log.info('Saved Noon rating summary from the product page.');
+        } else {
+            log.warning('Rating summary was requested, but Noon did not publish one for this page.');
+        }
+    }
+
+    const summary = {
         productId: sku,
         locale: normalizedLocale,
         requestedTotal,
         savedTotal: totalSaved,
+        apiReportedTotal: apiReportedTotal ?? null,
+        stopReason,
         usedBrowserFetchFallback: useBrowserFallback,
+        sessionWarmUpUsed,
+        sessionRefreshRetried,
+        ratingSummaryRequested: shouldIncludeRatingSummary,
+        ratingSummarySaved,
         pageLoaded,
         interceptedApiUrl: interceptedApiUrl || null,
         interceptedInternalHeaders: Boolean(interceptedInternalHeaders),
         effectiveApiUrl: apiUrl,
         proxyCountryCode: desiredCountryCode,
-    });
+    };
+    await Actor.setValue('SUMMARY', summary);
+
+    if (totalSaved === 0) {
+        await Actor.setValue('RUN_DIAGNOSTICS', {
+            ...summary,
+            reason: 'No review records were returned by Noon after browser and JSON fallbacks.',
+        });
+        fatalError = new Error('No Noon reviews were extracted. See RUN_DIAGNOSTICS for safe troubleshooting details.');
+    } else {
+        log.info(`Extraction complete. Total saved: ${totalSaved}`);
+    }
+} catch (error) {
+    fatalError = error;
 } finally {
     if (context) await context.close().catch(() => undefined);
     if (browser) await browser.close().catch(() => undefined);
+    if (fatalError) {
+        const message = describeError(fatalError);
+        log.error(`Run failed: ${message}`);
+        await Actor.fail(message);
+    }
     await Actor.exit();
 }

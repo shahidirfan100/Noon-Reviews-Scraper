@@ -60,7 +60,19 @@ The actor maps the stable review fields and preserves additional non-empty sourc
 
 The actor already uses the selected JSON endpoint for extraction and pagination. Browser use is limited to establishing the Noon session and collecting the request context that the protected endpoint requires. Review records are collected from JSON responses, not from rendered HTML.
 
+When `startUrl` is supplied, the actor opens that exact Noon URL first. It uses the live review request when available, or the loaded page's canonical product context when Noon has not yet issued that request, to identify the review target for subsequent paginated requests. This supports Noon product identifiers such as `N…` and `Z…` without parsing the raw input URL. `productId` remains an optional alternative for runs that do not provide a URL.
+
 Direct HTTP replay and Impit replay both failed with HTTP 403 without this session state. Replacing the browser-assisted session with an HTTP-only path would therefore reduce reliability, so no transport conversion was made.
+
+## Pagination behavior
+
+The endpoint is page-based and can return a short page before an explicit total is available. The actor therefore continues after a short batch and stops only when Noon reports a total that has been reached, returns an empty page, or returns duplicate-only data twice. The actor retains Noon's live `grouped` request setting when one is captured, otherwise it uses the endpoint's established default.
+
+## Written reviews versus ratings
+
+The selected review-list response contains individual published review records. Noon product pages can separately show a larger aggregate number labelled `Ratings`; rating-only submissions do not expose an author, date, title, or review text and must not be fabricated as individual reviews. The actor therefore keeps `results_wanted` scoped to written-review records.
+
+When `includeRatingSummary` is enabled, the actor saves at most one additional `rating_summary` dataset item from Noon-published aggregate rating data. It does not increase the written-review count or imply that every rating has a written review.
 
 ## Data Quality Findings
 

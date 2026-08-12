@@ -13,8 +13,14 @@
     "titleTranslation": "Title Translation",
     "reviewTextTranslation": "Review Text Translation",
     "helpfulCount": "Helpful Votes",
-    "imageUrls": "Review Images",
-    "variant": "Product Variant"
+    "imageUrls": "Review Image Identifiers",
+    "imageUrlsV2": "Review Image URLs",
+    "variant": "Product Variant",
+    "showTranslateBtn": "Translation Available",
+    "language": "Review Language",
+    "uid": "Review ID",
+    "recordType": "Record Type",
+    "ratingSummary": "Aggregate Rating Summary"
   },
   "views": {
     "overview": {
@@ -22,6 +28,7 @@
       "transformation": {
         "fields": [
           "productId",
+          "recordType",
           "variantSku",
           "title",
           "rating",

@@ -1,6 +1,7 @@
 {
   "productId": "N70105592V",
   "results_wanted": 20,
+  "includeRatingSummary": false,
   "sortFilter": "helpful",
   "locale": "en-ae",
   "proxyConfiguration": {

@@ -2,7 +2,7 @@
 
 Noon Reviews Scraper collects public customer reviews from Noon.com product pages and saves each review as a structured dataset item. Provide a Noon product ID such as `N70105592V` or a complete product/reviews URL, then choose the number of reviews, review order, and regional locale.
 
-The Noon reviews data includes ratings, review titles, written feedback, reviewer names, verified-purchase status, helpful votes, review images, translations, timestamps, and purchased product variants. Use the results for product research, competitor monitoring, customer feedback analysis, sentiment workflows, catalog enrichment, or AI and reporting pipelines.
+The Noon reviews data includes ratings, review titles, written feedback, reviewer names, verified-purchase status, helpful votes, review images, translations, timestamps, and purchased product variants. You can also opt in to one separate aggregate-rating item when Noon publishes it. Use the results for product research, competitor monitoring, customer feedback analysis, sentiment workflows, catalog enrichment, or AI and reporting pipelines.
 
 ## Why use Noon Reviews Scraper?
 
@@ -37,11 +37,13 @@ Each dataset item represents one customer review. Fields that are not published 
 | `showTranslateBtn` | Boolean | Whether Noon shows a translation option for the review. |
 | `language` | String | Language of the published review. |
 | `uid` | String | Source identifier for the review. |
+| `recordType` | String | `rating_summary` for the optional aggregate-rating item. |
+| `ratingSummary` | Object | Noon-published rating count, average rating, or star breakdown when available. |
 
 ## How to use Noon Reviews Scraper
 
 1. Open Noon Reviews Scraper in the Apify Console.
-2. Enter a Noon `productId` or a complete `startUrl`. At least one of these values is needed.
+2. Enter a Noon `productId` or a complete `startUrl`. At least one of these values is needed. When both are supplied, the URL takes priority.
 3. Set `results_wanted` and choose the desired `sortFilter` and `locale`.
 4. Keep the default Apify residential proxy configuration for larger or recurring runs, or provide your own supported proxy settings.
 5. Start the run and inspect the dataset preview.
@@ -51,14 +53,15 @@ Each dataset item represents one customer review. Fields that are not published 
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `productId` | String | No* | `N70105592V` | Noon product ID, for example `N70105592V`. |
-| `startUrl` | String | No* | - | Full Noon product or reviews URL containing the product ID. |
-| `results_wanted` | Integer | No | `20` | Maximum number of reviews to save, up to `1,000`. |
+| `productId` | String | No* | `N70105592V` | Noon product ID, for example `N70105592V`. Used unless `startUrl` is supplied. |
+| `startUrl` | String | No* | - | Full Noon product or reviews URL. The Actor opens this exact URL and it takes priority over `productId`. |
+| `results_wanted` | Integer | No | `20` | Maximum number of written reviews to save, up to `1,000`. |
+| `includeRatingSummary` | Boolean | No | `false` | Add one `rating_summary` item when Noon publishes aggregate rating data. It does not create individual reviews for rating-only submissions. |
 | `sortFilter` | String | No | `helpful` | Review order: `helpful`, `newest`, `highest_rating`, or `lowest_rating`. |
 | `locale` | String | No | `en-ae` | Language and country code, such as `en-ae`, `ar-ae`, or `en-sa`. |
 | `proxyConfiguration` | Object | No | Apify residential proxy | Apify Proxy settings for reliable collection. |
 
-\* Provide either `productId` or `startUrl`. If both are provided, `productId` identifies the product to collect.
+\* Provide either `productId` or `startUrl`. If both are provided, `startUrl` identifies the product to collect.
 
 ### Locale examples
 
@@ -95,6 +98,8 @@ The Actor writes review records to the default Apify dataset. The primary output
 | `showTranslateBtn` | Boolean | Translation-option indicator. |
 | `language` | String | Published review language. |
 | `uid` | String | Source review identifier. |
+| `recordType` | String | `rating_summary` for the optional aggregate-rating item. |
+| `ratingSummary` | Object | Noon-published rating count, average rating, or star breakdown when available. |
 
 ## Usage Examples
 
@@ -119,6 +124,7 @@ Use a complete Noon reviews URL when you already have a product page link:
 {
   "startUrl": "https://www.noon.com/uae-en/reviews/N70105592V/",
   "results_wanted": 50,
+  "includeRatingSummary": true,
   "sortFilter": "newest",
   "locale": "en-ae"
 }
@@ -143,7 +149,7 @@ Collect a larger set of low-rated reviews from the Saudi Arabic storefront for q
 
 ## Sample Output
 
-Each saved item represents one Noon customer review. The following example shows the main fields that may be returned:
+Each regular dataset item represents one Noon customer review. When `includeRatingSummary` is enabled, the Actor may add one separate `rating_summary` item for ratings that have no individual written-review record. The following example shows the main review fields that may be returned:
 
 ```json
 {
@@ -200,7 +206,7 @@ Each saved item represents one Noon customer review. The following example shows
 
 ### Can I collect reviews from a Noon product URL?
 
-Yes. Put a complete product or reviews URL in `startUrl`. The URL should contain the Noon product ID.
+Yes. Put a complete Noon product or reviews URL in `startUrl`. The Actor opens the URL directly.
 
 ### Can I collect thousands of Noon reviews?
 

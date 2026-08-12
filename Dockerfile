@@ -1,5 +1,5 @@
 # Specify the base Docker image with Playwright + Firefox
-FROM apify/actor-node-playwright-firefox:22-1.58.2
+FROM apify/actor-node-playwright-firefox:24-1.59.1
 
 # Check preinstalled packages
 RUN npm ls crawlee apify puppeteer playwright
@@ -24,5 +24,6 @@ RUN npm --quiet set progress=false \
 # Copy remaining source code
 COPY --chown=myuser:myuser . ./
 
-# Start the actor
-CMD npm start --silent
+# Start the actor directly so application logs and uncaught errors are always
+# forwarded to the Apify run log.
+CMD ["node", "src/main.js"]

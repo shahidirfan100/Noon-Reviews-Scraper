@@ -4,19 +4,19 @@
   "type": "object",
   "schemaVersion": 1,
   "properties": {
-    "productId": {
-      "title": "Product ID",
-      "type": "string",
-      "description": "The specific Noon product ID (e.g., N70105592V). Either this or startUrl must be provided.",
-      "editor": "textfield",
-      "default": "N70105592V",
-      "prefill": "N70105592V"
-    },
     "startUrl": {
       "title": "Start URL",
       "type": "string",
-      "description": "Start scraping from a specific Noon product or review URL. Example: https://www.noon.com/uae-en/reviews/N70105592V/",
+      "description": "Open this Noon product or reviews URL directly. If supplied, this takes priority over productId. Example: https://www.noon.com/uae-en/reviews/N70105592V/",
       "editor": "textfield"
+    },
+    "productId": {
+      "title": "Product ID",
+      "type": "string",
+      "description": "The specific Noon product ID (e.g., N70105592V). Used when startUrl is not provided.",
+      "editor": "textfield",
+      "default": "N70105592V",
+      "prefill": "N70105592V"
     },
     "results_wanted": {
       "title": "Maximum number of reviews",
@@ -26,6 +26,14 @@
       "default": 20,
       "prefill": 20,
       "editor": "number"
+    },
+    "includeRatingSummary": {
+      "title": "Include aggregate rating summary",
+      "type": "boolean",
+      "description": "Add one rating-summary dataset item when Noon publishes an average rating or star breakdown. It does not create individual reviews for ratings without written feedback.",
+      "default": false,
+      "prefill": false,
+      "editor": "checkbox"
     },
     "sortFilter": {
       "title": "Sort Reviews By",

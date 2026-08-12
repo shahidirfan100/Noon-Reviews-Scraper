@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 /* eslint-disable no-console */
 
-const EXPECTED_PLAYWRIGHT_VERSION = '1.58.2';
+const EXPECTED_PLAYWRIGHT_VERSION = '1.59.1';
 
 const packageJson = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 const configuredVersion = packageJson.dependencies?.playwright;
