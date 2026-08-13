@@ -1,18 +1,12 @@
-# Specify the base Docker image with Playwright + Firefox
-FROM apify/actor-node-playwright-firefox:24-1.59.1
-
-# Check preinstalled packages
-RUN npm ls crawlee apify puppeteer playwright
+# Patchright-compatible image with Chrome runtime
+FROM apify/actor-node-playwright-chrome:22
 
 # Copy just package.json and package-lock.json first for caching
-COPY --chown=myuser:myuser package*.json Dockerfile check-playwright-version.mjs ./
-
-# Check Playwright version matches base image
-RUN node check-playwright-version.mjs
+COPY --chown=myuser:myuser package*.json Dockerfile ./
 
 # Install NPM packages (production only)
 RUN npm --quiet set progress=false \
-    && npm install --omit=dev --omit=optional --ignore-scripts \
+    && npm install --omit=dev --omit=optional \
     && echo "Installed NPM packages:" \
     && (npm list --omit=dev --all || true) \
     && echo "Node.js version:" \

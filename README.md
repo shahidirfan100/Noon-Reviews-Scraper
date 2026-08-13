@@ -55,11 +55,11 @@ Each dataset item represents one customer review. Fields that are not published 
 |-----------|------|----------|---------|-------------|
 | `productId` | String | No* | `N70105592V` | Noon product ID, for example `N70105592V`. Used unless `startUrl` is supplied. |
 | `startUrl` | String | No* | - | Full Noon product or reviews URL. The Actor opens this exact URL and it takes priority over `productId`. |
-| `results_wanted` | Integer | No | `20` | Maximum number of written reviews to save, up to `1,000`. |
+| `results_wanted` | Integer | No | `20` | Maximum number of written reviews to save. Allowed range: `1` to `1,000`. |
 | `includeRatingSummary` | Boolean | No | `false` | Add one `rating_summary` item when Noon publishes aggregate rating data. It does not create individual reviews for rating-only submissions. |
 | `sortFilter` | String | No | `helpful` | Review order: `helpful`, `newest`, `highest_rating`, or `lowest_rating`. |
 | `locale` | String | No | `en-ae` | Language and country code, such as `en-ae`, `ar-ae`, or `en-sa`. |
-| `proxyConfiguration` | Object | No | Apify residential proxy | Apify Proxy settings for reliable collection. |
+| `proxyConfiguration` | Object | No | `{"useApifyProxy":true,"apifyProxyGroups":["RESIDENTIAL"]}` | Apify Proxy settings for reliable collection. |
 
 \* Provide either `productId` or `startUrl`. If both are provided, `startUrl` identifies the product to collect.
 

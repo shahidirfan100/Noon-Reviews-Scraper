@@ -1,7 +1,7 @@
 import { Actor, log } from 'apify';
 import { Dataset } from 'crawlee';
 import { gotScraping } from 'got-scraping';
-import { firefox } from 'playwright';
+import { chromium } from 'patchright';
 
 const API_URL = 'https://www.noon.com/_vs/mp/mp-trust-api/product-reviews/sku/list';
 const PER_PAGE = 15;
@@ -16,14 +16,6 @@ const REVIEW_API_PATTERNS = [
     /\/reviews\/sku\//i,
 ];
 const RATING_SUMMARY_API_PATTERN = /\/product-ratings\/sku\//i;
-const USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 15.7; rv:147.0) Gecko/20100101 Firefox/147.0',
-    'Mozilla/5.0 (X11; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0',
-];
-
-const pickUserAgent = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-
 const describeError = (error) => {
     const message = String(error?.message || error || 'Unknown error')
         .replace(/https?:\/\/[^\s]+/gi, '[URL]')
@@ -110,6 +102,7 @@ const sanitizeRequestHeaders = (headers) => {
         'connection',
         'accept-encoding',
         'transfer-encoding',
+        'user-agent',
     ]);
     const clean = {};
     for (const [key, value] of Object.entries(headers || {})) {
@@ -142,7 +135,7 @@ const sleep = (ms) => new Promise((resolve) => {
 
 const hasAccessDeniedMarker = (text) => /access denied/i.test(String(text || ''));
 
-const parseProxyForPlaywright = (proxyUrl) => {
+const parseProxyForBrowser = (proxyUrl) => {
     if (!proxyUrl) return undefined;
     try {
         const parsed = new URL(proxyUrl);
@@ -376,7 +369,6 @@ try {
         log.warning('Proxy configuration unavailable. Continuing without proxy for this run.');
     }
     let sessionProxyUrl;
-    const userAgent = pickUserAgent();
     let interceptedHeaders;
     let interceptedInternalHeaders;
     let interceptedPayloadTemplate;
@@ -385,21 +377,19 @@ try {
     let interceptedRatingSummaryData;
 
     log.info(`Starting Noon Reviews Fetcher | source=${inputSource} | target=${requestedTotal}`);
-    log.info('Launching Firefox to obtain session and intercept network calls...');
+    log.info('Launching stealth Chrome to obtain session and intercept network calls...');
 
     const launchBrowserAttempt = async (attempt) => {
         sessionProxyUrl = proxyConfiguration
             ? await proxyConfiguration.newUrl(`noon_reviews_${Date.now()}_${attempt}`)
             : undefined;
-        const playwrightProxy = parseProxyForPlaywright(sessionProxyUrl);
+        const browserProxy = parseProxyForBrowser(sessionProxyUrl);
 
-        browser = await firefox.launch({
-            headless: true,
-            ...(playwrightProxy ? { proxy: playwrightProxy } : {}),
-        });
-        context = await browser.newContext({
-            userAgent,
-            viewport: { width: 1280, height: 720 },
+        context = await chromium.launchPersistentContext('./user_data', {
+            channel: 'chrome',
+            headless: false,
+            noViewport: true,
+            ...(browserProxy ? { proxy: browserProxy } : {}),
         });
         page = await context.newPage();
 
@@ -744,7 +734,6 @@ try {
             'content-type': 'application/json',
             origin: 'https://www.noon.com',
             referer: pageUrl,
-            'user-agent': userAgent,
             'x-platform': 'web',
             'x-locale': normalizedLocale,
             'x-mp-country': country,

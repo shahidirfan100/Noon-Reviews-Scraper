@@ -1,3 +1,4 @@
 node_modules
 /storage
+/user_data
 package-lock.json
