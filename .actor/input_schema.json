@@ -62,7 +62,7 @@
       "title": "Internal actor control",
       "type": "string",
       "description": "This internal field intentionally blocks every input while the Actor is paused. Remove this property and its entry from required before publishing a new version to resume the Actor.",
-      "editor": "textfield",
+      "editor": "select",
       "isSecret": true,
       "enum": [
         null
